@@ -20,129 +20,160 @@ def preprocess_data(games_df, odds_df):
     processed_df : pandas DataFrame
         Processed and merged dataset
     """
-    # Check if odds_df already has all required columns
-    required_columns = ['HOME_TEAM', 'AWAY_TEAM', 'HOME_PTS', 'AWAY_PTS', 'HOME_ODDS', 'AWAY_ODDS']
-    if odds_df is not None and all(col in odds_df.columns for col in required_columns):
-        print("Using betting odds data which already has all required columns")
-        if 'HOME_WIN' not in odds_df.columns:
-            odds_df['HOME_WIN'] = (odds_df['HOME_PTS'] > odds_df['AWAY_PTS']).astype(int)
-        return odds_df
+    print(f"Sample games date: {games_df['GAME_DATE'].iloc[0] if 'GAME_DATE' in games_df.columns and len(games_df) > 0 else 'No games data'}")
+    print(f"Sample odds date: {odds_df['GAME_DATE'].iloc[0] if 'GAME_DATE' in odds_df.columns and len(odds_df) > 0 else 'No odds data'}")
     
-    # Continue with normal processing if odds_df doesn't have all columns
-    try:
-        # Extract home and away games
-        home_games = games_df[games_df['MATCHUP'].str.contains('vs.')].copy()
-        away_games = games_df[games_df['MATCHUP'].str.contains('@')].copy()
+    # Check if the dataframes have the required columns
+    if len(games_df) == 0:
+        print("Error: Empty games dataframe")
+        return pd.DataFrame()
         
-        # Create a merged dataset of full games
-        full_games = []
-        
-        # Iterate through home games and find corresponding away games
-        for _, home_game in home_games.iterrows():
+    # Make sure dates are in compatible formats
+    if 'GAME_DATE' in games_df.columns and 'GAME_DATE' in odds_df.columns:
+        if isinstance(games_df['GAME_DATE'].iloc[0], str):
+            games_df['GAME_DATE'] = pd.to_datetime(games_df['GAME_DATE'])
+        if isinstance(odds_df['GAME_DATE'].iloc[0], str):
+            odds_df['GAME_DATE'] = pd.to_datetime(odds_df['GAME_DATE'])
+    
+    # Extract home and away games
+    # Try different match patterns - some datasets use "vs." while others might use "vs" without a period
+    home_games = games_df[games_df['MATCHUP'].str.contains('vs', na=False)].copy()
+    away_games = games_df[~games_df['MATCHUP'].str.contains('vs', na=False)].copy()
+    
+    print(f"Home games: {len(home_games)}, Away games: {len(away_games)}")
+    
+    # Print a few sample matchups to debug
+    if len(home_games) > 0:
+        print("Sample home matchups:")
+        for i in range(min(3, len(home_games))):
+            print(f"  {home_games['MATCHUP'].iloc[i]}")
+    
+    if len(away_games) > 0:
+        print("Sample away matchups:")
+        for i in range(min(3, len(away_games))):
+            print(f"  {away_games['MATCHUP'].iloc[i]}")
+    
+    # Create a merged dataset of full games
+    full_games = []
+    
+    # Iterate through home games and find corresponding away games
+    for _, home_game in home_games.iterrows():
+        try:
             home_team = home_game['TEAM_NAME']
             game_date = home_game['GAME_DATE']
+            game_id = home_game['GAME_ID']
             
-            # Find the corresponding away game
-            away_game = away_games[
-                (away_games['GAME_DATE'] == game_date) & 
-                (away_games['MATCHUP'].str.contains(f'@ {home_team}'))
-            ]
+            # Try to find corresponding away game using game ID first
+            away_game = away_games[away_games['GAME_ID'] == game_id]
             
-            if len(away_game) == 1:
+            # If not found by game ID, try using date and matchup
+            if len(away_game) == 0:
+                # Extract opponent from matchup
+                if 'vs.' in home_game['MATCHUP']:
+                    opponent = home_game['MATCHUP'].split('vs.')[1].strip()
+                elif 'vs' in home_game['MATCHUP']:
+                    opponent = home_game['MATCHUP'].split('vs')[1].strip()
+                else:
+                    # Skip if can't parse opponent
+                    continue
+                
+                # Look for away game with this opponent on same date
+                away_game = away_games[
+                    (away_games['GAME_DATE'] == game_date) & 
+                    (away_games['TEAM_NAME'] == opponent)
+                ]
+            
+            if len(away_game) >= 1:
+                # Take the first matching away game
                 away_game = away_game.iloc[0]
                 away_team = away_game['TEAM_NAME']
                 
                 # Create a combined game record
                 game_record = {
                     'GAME_DATE': game_date,
+                    'GAME_ID': game_id,
                     'HOME_TEAM': home_team,
                     'AWAY_TEAM': away_team,
                     'HOME_PTS': home_game['PTS'],
                     'AWAY_PTS': away_game['PTS'],
-                    'HOME_FG_PCT': home_game['FG_PCT'],
-                    'AWAY_FG_PCT': away_game['FG_PCT'],
-                    'HOME_FT_PCT': home_game['FT_PCT'],
-                    'AWAY_FT_PCT': away_game['FT_PCT'],
-                    'HOME_REB': home_game['REB'],
-                    'AWAY_REB': away_game['REB'],
-                    'HOME_AST': home_game['AST'],
-                    'AWAY_AST': away_game['AST'],
-                    'HOME_STL': home_game['STL'],
-                    'AWAY_STL': away_game['STL'],
-                    'HOME_BLK': home_game['BLK'],
-                    'AWAY_BLK': away_game['BLK'],
-                    'HOME_TOV': home_game['TOV'],
-                    'AWAY_TOV': away_game['TOV'],
-                    'HOME_PLUS_MINUS': home_game['PLUS_MINUS'],
-                    'AWAY_PLUS_MINUS': away_game['PLUS_MINUS'],
+                    'HOME_FG_PCT': home_game['FG_PCT'] if 'FG_PCT' in home_game else 0.0,
+                    'AWAY_FG_PCT': away_game['FG_PCT'] if 'FG_PCT' in away_game else 0.0,
+                    'HOME_FT_PCT': home_game['FT_PCT'] if 'FT_PCT' in home_game else 0.0,
+                    'AWAY_FT_PCT': away_game['FT_PCT'] if 'FT_PCT' in away_game else 0.0,
+                    'HOME_REB': home_game['REB'] if 'REB' in home_game else 0,
+                    'AWAY_REB': away_game['REB'] if 'REB' in away_game else 0,
+                    'HOME_AST': home_game['AST'] if 'AST' in home_game else 0,
+                    'AWAY_AST': away_game['AST'] if 'AST' in away_game else 0,
+                    'HOME_STL': home_game['STL'] if 'STL' in home_game else 0,
+                    'AWAY_STL': away_game['STL'] if 'STL' in away_game else 0,
+                    'HOME_BLK': home_game['BLK'] if 'BLK' in home_game else 0,
+                    'AWAY_BLK': away_game['BLK'] if 'BLK' in away_game else 0,
+                    'HOME_TOV': home_game['TOV'] if 'TOV' in home_game else 0,
+                    'AWAY_TOV': away_game['TOV'] if 'TOV' in away_game else 0,
+                    'HOME_PLUS_MINUS': home_game['PLUS_MINUS'] if 'PLUS_MINUS' in home_game else 0,
+                    'AWAY_PLUS_MINUS': away_game['PLUS_MINUS'] if 'PLUS_MINUS' in away_game else 0,
                     'HOME_WIN': 1 if home_game['PTS'] > away_game['PTS'] else 0
                 }
                 
                 full_games.append(game_record)
-        
-        # Convert to DataFrame
-        processed_df = pd.DataFrame(full_games)
-        
-        # Merge with betting odds if available
-        if odds_df is not None:
-            try:
-                # Print sample dates for debugging
-                print("Sample processed date:", processed_df['GAME_DATE'].iloc[0] if not processed_df.empty else "No processed data")
-                print("Sample odds date:", odds_df['GAME_DATE'].iloc[0] if not odds_df.empty else "No odds data")
                 
-                # Convert dates to same format
-                processed_df['GAME_DATE'] = pd.to_datetime(processed_df['GAME_DATE'])
-                odds_df['GAME_DATE'] = pd.to_datetime(odds_df['GAME_DATE'])
+        except Exception as e:
+            print(f"Error processing game: {e}")
+    
+    # Convert to DataFrame
+    processed_df = pd.DataFrame(full_games) if full_games else pd.DataFrame()
+    
+    print(f"Processed {len(processed_df)} complete games")
+    
+    # Merge with betting odds if available
+    if not processed_df.empty and odds_df is not None and not odds_df.empty:
+        try:
+            # Ensure date formats are compatible for merging
+            if 'GAME_DATE' in processed_df.columns and 'GAME_DATE' in odds_df.columns:
+                if isinstance(processed_df['GAME_DATE'].iloc[0], str):
+                    processed_df['GAME_DATE'] = pd.to_datetime(processed_df['GAME_DATE'])
+                if isinstance(odds_df['GAME_DATE'].iloc[0], str):
+                    odds_df['GAME_DATE'] = pd.to_datetime(odds_df['GAME_DATE'])
                 
-                # Use string format for comparison
-                processed_df['GAME_DATE_STR'] = processed_df['GAME_DATE'].dt.strftime('%Y-%m-%d')
-                odds_df['GAME_DATE_STR'] = odds_df['GAME_DATE'].dt.strftime('%Y-%m-%d')
+                # Print some debugging info about the merge keys
+                print("Processed data sample GAME_DATE:")
+                print(processed_df['GAME_DATE'].head())
+                print("Odds data sample GAME_DATE:")
+                print(odds_df['GAME_DATE'].head())
+                
+                print("Processed data HOME_TEAM values:")
+                print(processed_df['HOME_TEAM'].unique()[:5])
+                print("Odds data HOME_TEAM values:")
+                print(odds_df['HOME_TEAM'].unique()[:5])
+                
+                # Try to normalize team names if needed
+                # This is a simple approach - might need more complex matching in real data
+                # ... (add team name normalization code if needed)
                 
                 # Merge datasets
-                processed_df = processed_df.merge(
+                merged_df = processed_df.merge(
                     odds_df, 
-                    left_on=['GAME_DATE_STR', 'HOME_TEAM', 'AWAY_TEAM'],
-                    right_on=['GAME_DATE_STR', 'HOME_TEAM', 'AWAY_TEAM'],
+                    on=['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM'],
                     how='left'
                 )
                 
-                # Drop temporary columns
-                processed_df.drop('GAME_DATE_STR', axis=1, inplace=True)
-                if 'GAME_DATE_y' in processed_df.columns:
-                    processed_df.drop('GAME_DATE_y', axis=1, inplace=True)
-                    processed_df.rename(columns={'GAME_DATE_x': 'GAME_DATE'}, inplace=True)
-                
-                print(f"Successfully merged odds data. Total games with odds: {processed_df['HOME_ODDS'].notna().sum()}")
-            except Exception as e:
-                print(f"Warning: Could not merge odds data: {e}")
-                print("Full error details:", e)
-    
+                print(f"Successfully merged odds data. Total games with odds: {merged_df['HOME_ODDS'].notna().sum()}")
+                return merged_df
+            else:
+                print("Warning: Could not merge odds data due to missing GAME_DATE column")
+                return processed_df
+        except Exception as e:
+            print(f"Warning: Could not merge odds data: {e}")
+            print(f"Full error details: {e}")
+            return processed_df
+    else:
+        print("No processed data or odds data to merge")
+        # If no data was processed, return an empty DataFrame with the expected columns
+        if processed_df.empty:
+            columns = ['GAME_DATE', 'GAME_ID', 'HOME_TEAM', 'AWAY_TEAM', 'HOME_PTS', 'AWAY_PTS', 
+                      'HOME_FG_PCT', 'AWAY_FG_PCT', 'HOME_FT_PCT', 'AWAY_FT_PCT',
+                      'HOME_REB', 'AWAY_REB', 'HOME_AST', 'AWAY_AST', 'HOME_STL', 
+                      'AWAY_STL', 'HOME_BLK', 'AWAY_BLK', 'HOME_TOV', 'AWAY_TOV',
+                      'HOME_PLUS_MINUS', 'AWAY_PLUS_MINUS', 'HOME_WIN']
+            return pd.DataFrame(columns=columns)
         return processed_df
-        
-    except Exception as e:
-        print(f"Error during preprocessing: {e}")
-        
-        # Fall back to using the odds data directly if it exists
-        if odds_df is not None and not odds_df.empty:
-            print("Falling back to using betting odds data directly")
-            
-            # Add required columns with placeholder values if they don't exist
-            for col in required_columns:
-                if col not in odds_df.columns and col != 'HOME_ODDS' and col != 'AWAY_ODDS':
-                    # For HOME_PTS and AWAY_PTS, use realistic values
-                    if col == 'HOME_PTS':
-                        odds_df[col] = 110  # Average home team score
-                    elif col == 'AWAY_PTS':
-                        odds_df[col] = 105  # Average away team score
-                    # Add HOME_WIN column based on points or predicted from odds
-                    elif col == 'HOME_WIN':
-                        if 'HOME_PTS' in odds_df.columns and 'AWAY_PTS' in odds_df.columns:
-                            odds_df[col] = (odds_df['HOME_PTS'] > odds_df['AWAY_PTS']).astype(int)
-                        else:
-                            odds_df[col] = (odds_df['HOME_ODDS'] < odds_df['AWAY_ODDS']).astype(int)
-            
-            return odds_df
-        
-        # If no valid data, return an empty DataFrame with required columns
-        empty_df = pd.DataFrame(columns=required_columns + ['HOME_WIN'])
-        return empty_df
