@@ -1,0 +1,20 @@
+# Data directories
+nba-parlay-predictor/data/raw/*.csv
+nba-parlay-predictor/data/processed/*.csv
+
+# Results that may contain generated data
+nba-parlay-predictor/results/models/*.pkl
+nba-parlay-predictor/results/figures/*.png
+
+# Cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/
+
+# Environment files
+.env
+.venv
+env/
+venv/
+ENV/
