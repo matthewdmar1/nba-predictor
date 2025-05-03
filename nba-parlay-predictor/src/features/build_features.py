@@ -21,6 +21,10 @@ def engineer_features(df):
     # Create a copy to avoid modifying the original
     feature_df = df.copy()
     
+    # Print column information for debugging
+    print("DEBUGGING - Available columns in processed data:")
+    print(feature_df.columns.tolist())
+    
     # 1. Basic statistical differences
     print("Creating basic statistical features...")
     feature_df['PTS_DIFF'] = feature_df['HOME_PTS'] - feature_df['AWAY_PTS']

@@ -308,8 +308,8 @@ def create_betting_features(games_df, team_stats_df):
     print(odds_df[display_cols].head())
     
     # Save to CSV
-    os.makedirs('data/processed', exist_ok=True)
-    output_file = f"data/processed/betting_odds.csv"
+    os.makedirs('data/raw', exist_ok=True)
+    output_file = f"data/raw/betting_odds.csv"
     odds_df.to_csv(output_file, index=False)
     print(f"Saved betting odds to {output_file}")
     
