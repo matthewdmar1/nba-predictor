@@ -95,7 +95,7 @@ def plot_confusion_matrix(y_true, y_pred, figsize=(8, 6), save_path=None):
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         print(f"Confusion matrix plot saved to {save_path}")
 
-def plot_roi(roi_results, figsize=(12, 6), save_path=None):
+def plot_roi(roi_results, figsize=(10, 6), save_path=None):
     """
     Plot ROI simulation results
     
@@ -111,22 +111,21 @@ def plot_roi(roi_results, figsize=(12, 6), save_path=None):
     roi_df = roi_results['roi_df']
     
     # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    plt.figure(figsize=figsize)
     
-    # Plot 1: Parlay Profit by Size
-    sns.barplot(x='parlay_size', y='profit', data=roi_df, ax=ax1, palette='viridis')
-    ax1.set_title('Profit by Parlay Size')
-    ax1.set_xlabel('Number of Games in Parlay')
-    ax1.set_ylabel('Profit ($)')
-    ax1.axhline(y=0, color='red', linestyle='--', alpha=0.7)
+    # Plot 1: Parlay Profit by Size (left side)
+    plt.subplot(1, 2, 1)
+    sizes = roi_df['parlay_size'].unique()
+    profits = [roi_df[roi_df['parlay_size'] == size]['profit'].mean() for size in sizes]
     
-    for i, row in roi_df.iterrows():
-        color = 'green' if row['profit'] > 0 else 'red'
-        ax1.text(i, row['profit'] + np.sign(row['profit']) * 5, 
-                f"${row['profit']:.2f}", 
-                ha='center', va='center', color=color, fontweight='bold')
+    plt.bar(sizes, profits, color='skyblue')
+    plt.axhline(y=0, color='red', linestyle='--', alpha=0.7)
+    plt.title('Average Profit by Parlay Size')
+    plt.xlabel('Number of Games in Parlay')
+    plt.ylabel('Profit ($)')
     
-    # Plot 2: Overall ROI
+    # Plot 2: Win/Loss Pie (right side)
+    plt.subplot(1, 2, 2)
     labels = ['Win', 'Loss']
     wins = roi_df['wins'].sum()
     losses = len(roi_df) - wins
@@ -134,26 +133,28 @@ def plot_roi(roi_results, figsize=(12, 6), save_path=None):
     colors = ['#2ecc71', '#e74c3c']
     explode = (0.1, 0) if wins > 0 else (0, 0.1)
     
-    ax2.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
+    plt.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
             shadow=True, startangle=90)
-    ax2.axis('equal')
-    ax2.set_title(f'Overall ROI: {roi_results["total_roi"]:.2f}%')
+    plt.axis('equal')
+    plt.title(f'Win/Loss Rate\nROI: {roi_results["total_roi"]:.2f}%')
     
-    # Add text with totals
+    # Add text annotation in a separate text box
+    text_str = (f"Investment: ${roi_results['total_investment']:.2f}\n"
+                f"Profit: ${roi_results['total_profit']:.2f}")
+    
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    text_str = (f"Total Investment: ${roi_results['total_investment']:.2f}\n"
-                f"Total Profit: ${roi_results['total_profit']:.2f}")
-    ax2.text(0, -1.2, text_str, transform=ax2.transAxes, fontsize=10,
-             verticalalignment='top', bbox=props, ha='center')
+    plt.text(1.1, -0.1, text_str, transform=plt.gca().transAxes, fontsize=9,
+             verticalalignment='top', bbox=props)
     
-    plt.tight_layout()
+    plt.tight_layout(pad=3.0)
     
-    # Save figure if path provided
+    # Save figure with explicit dimensions to avoid the size error
     if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.savefig(save_path, dpi=100, bbox_inches='tight', 
+                    format='png', facecolor='white', 
+                    transparent=False, pad_inches=0.5)
+        
         print(f"ROI simulation plot saved to {save_path}")
-    
-    plt.show()
 
 def plot_win_probability_distribution(results_df, figsize=(12, 6), save_path=None):
     """
