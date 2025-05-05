@@ -8,12 +8,33 @@ This project uses historical NBA game data and betting odds to train a machine l
 
 ## Features
 
-- Data fetching from NBA stats API
-- Automated feature engineering for game statistics
-- Machine learning model for predicting game outcomes
-- Parlay generation and ROI simulation
-- Visualization of model performance and betting results
-- Jupyter notebooks for interactive exploration
+- **Data Collection:** Fetch NBA game stats via the NBA API
+- **Machine Learning:** Predict game outcomes with logistic regression
+- **Parlay Generation:** Automatically create optimal parlays based on predictions
+- **ROI Analysis:** Simulate and track betting performance
+- **Web Interface:** Interactive frontend for real-time predictions
+
+## Project Structure
+
+```
+nba-parlay-predictor/
+├── config.py                 # Configuration settings
+├── main.py                   # Main script to run the pipeline
+├── data/                     # Data storage directory
+│   ├── raw/                  # Raw data files
+│   └── processed/            # Processed data files
+├── results/                  # Output directory
+│   ├── models/               # Trained models
+│   └── figures/              # Generated visualizations
+├── src/                      # Source code
+│   ├── data/                 # Data processing modules
+│   ├── features/             # Feature engineering
+│   ├── models/               # Model training and evaluation
+│   ├── visualization/        # Visualization utilities
+│   └── evaluation/           # Evaluation tools
+└── frontend/                 # Streamlit web interface
+    └── frontend.py           # Web app code
+```
 
 ## Prerequisites
 
@@ -23,63 +44,46 @@ This project uses historical NBA game data and betting odds to train a machine l
 
 ## Installation
 
-1. Clone the repository (or download and extract the ZIP file):
+### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/yourusername/nba-parlay-predictor.git
 cd nba-parlay-predictor
 ```
 
-2. Create and activate a virtual environment (recommended):
+### Step 2: Create and Activate Virtual Environment
 
+For Windows:
 ```bash
-# On Windows
 python -m venv .venv
 .venv\Scripts\activate
+```
 
-# On macOS/Linux
+For macOS/Linux:
+```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-3. Install the required dependencies:
+### Step 3: Install Required Packages
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Project Structure
+### Step 4: Create Directory Structure
 
-```
-nba-parlay-predictor/
-├── config.py                 # Configuration settings
-├── main.py                   # Main script to run the pipeline
-├── fetch_data.py             # Alternative data fetching module
-├── run.py                    # Helper script for setting up and running
-├── integrate_real_data.py    # Script for using real NBA data
-├── nba_data_demo.py          # Demo for NBA data retrieval
-├── requirements.txt          # Required Python packages
-├── data/                     # Data storage directory
-│   ├── raw/                  # Raw data files
-│   └── processed/            # Processed data files
-├── notebooks/                # Jupyter notebooks
-│   ├── 01_data_exploration.ipynb
-│   └── 02_model_evaluation.ipynb
-├── results/                  # Output directory
-│   ├── models/               # Trained models
-│   └── figures/              # Generated visualizations
-└── src/                      # Source code
-    ├── data/                 # Data processing modules
-    ├── features/             # Feature engineering
-    ├── models/               # Model training and evaluation
-    └── visualization/        # Visualization utilities
+Make sure all required directories exist:
+
+```bash
+mkdir -p data/raw data/processed results/models results/figures
 ```
 
 ## Usage
 
-### Quick Start
+### Run the Main Pipeline
 
-Run the main pipeline with default settings:
+To train the model and generate parlay recommendations:
 
 ```bash
 python main.py
@@ -91,11 +95,11 @@ This will:
 3. Train a prediction model
 4. Generate parlay recommendations
 5. Simulate ROI for the recommended parlays
-6. Create visualizations of the results
+6. Create visualizations
 
-### Running with Options
+### Using the Helper Script
 
-For more control, use the `run.py` script with various options:
+For more control, use the `run.py` script:
 
 ```bash
 # Set up environment and install requirements
@@ -104,34 +108,39 @@ python run.py --setup --install
 # Generate sample data and run the pipeline
 python run.py --generate-data --run
 
-# Launch Jupyter notebook for interactive exploration
-python run.py --notebook
-
-# Run everything (setup, install, generate data, run pipeline, launch notebook)
+# Run everything (setup, install, generate data, run pipeline)
 python run.py --all
 ```
 
-### Using Real NBA Data
+### Web Interface
 
-To use real NBA data instead of synthetic data:
-
-```bash
-python integrate_real_data.py
-```
-
-Note that this requires an internet connection and may be subject to API rate limits.
-
-### Exploring in Jupyter Notebooks
-
-Launch Jupyter to explore the data and models interactively:
+For a user-friendly interactive experience, run the Streamlit web app:
 
 ```bash
-jupyter notebook notebooks/
+cd frontend
+streamlit run frontend.py
 ```
 
-The provided notebooks include:
-- `01_data_exploration.ipynb`: Explore and visualize the NBA game data
-- `02_model_evaluation.ipynb`: Evaluate different models and parlay strategies
+This will launch a browser-based interface where you can:
+- View live betting odds
+- Get predictions for upcoming games
+- Build custom parlays
+- Analyze expected ROI
+
+## Data Sources
+
+The system can use data from several sources:
+
+1. **NBA API:** Real NBA game statistics (requires an internet connection)
+2. **Betting APIs:** Real-time odds from various sportsbooks
+3. **Synthetic Data:** For testing when real data is unavailable
+
+## Model Training
+
+The default model is a logistic regression classifier with the following features:
+- Team performance metrics (FG%, rebounds, assists, etc.)
+- Statistical differences between home and away teams
+- Betting market information (odds, spreads)
 
 ## Configuration
 
@@ -141,6 +150,37 @@ You can customize the behavior of the system by editing `config.py`. Key setting
 - `TEST_SIZE`: Proportion of data to use for testing (default: 0.3)
 - `MIN_CONFIDENCE`: Minimum prediction confidence for parlay selection (default: 0.65)
 - `MAX_PARLAY_SIZE`: Maximum number of games in a parlay (default: 3)
+
+## Evaluation
+
+To evaluate model performance, use the comprehensive evaluation script:
+
+```bash
+python run_evaluation.py comprehensive
+```
+
+Or run specific evaluation tools:
+
+```bash
+# Run backtesting simulation
+python run_evaluation.py backtest --confidence 0.7 --max-games 3
+
+# Compare different models
+python run_evaluation.py compare
+
+# Analyze feature importance
+python run_evaluation.py features --top-n 15
+```
+
+## Integration with Real Data
+
+To use real NBA data instead of synthetic data:
+
+```bash
+python integrate_real_data.py
+```
+
+Note that this requires an internet connection and may be subject to API rate limits.
 
 ## How It Works
 
@@ -153,6 +193,8 @@ You can customize the behavior of the system by editing `config.py`. Key setting
 4. **Parlay Generation**: The system identifies high-confidence predictions and combines them into parlays designed to maximize expected return.
 
 5. **ROI Simulation**: The performance of the recommended parlays is simulated to estimate potential returns.
+
+6. **Web Interface**: Users can interact with predictions and build custom parlays through a user-friendly web app.
 
 ## Extending the Project
 
@@ -167,3 +209,13 @@ The project uses logistic regression by default, but you can implement and test 
 ### Adding Real-time Data
 
 To use real-time data for upcoming games, extend the data fetching modules to retrieve the latest game information and odds.
+
+## Disclaimer
+
+This software is for educational and entertainment purposes only. Sports betting involves financial risk, and no betting system can guarantee profits. Always gamble responsibly and within your means.
+
+## Acknowledgments
+
+- NBA API for providing access to game statistics
+- Streamlit for the interactive web framework
+- scikit-learn for machine learning tools
