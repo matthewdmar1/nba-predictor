@@ -209,6 +209,30 @@ def default_features():
         'OFF_EFF_DIFF': 0.0
     }
 
+def debug_features(features, model):
+    """Debug feature formatting issues"""
+    try:
+        if not hasattr(model, 'steps'):
+            print("Model doesn't have steps attribute - using fallback")
+            return
+            
+        feature_names = model.steps[0][1].feature_names_in_
+        # Print expected vs actual feature names
+        print("Expected features:", feature_names)
+        print("Actual features:", list(features.keys()))
+        
+        # Check for any missing features
+        missing = [f for f in feature_names if f not in features]
+        if missing:
+            print("Missing features:", missing)
+            
+        # Check feature value ranges
+        for name in feature_names:
+            if name in features:
+                print(f"{name}: {features[name]}")
+    except Exception as e:
+        print("Debug error:", e)
+
 def extract_features_for_model(game_data):
     """
     Extract features in the exact format expected by your trained model
@@ -322,9 +346,7 @@ def extract_features_for_model(game_data):
         return default_features()
 
 def make_prediction(model, game_data):
-    """
-    Make prediction for a game using the trained model
-    """
+    """Make prediction with better error handling and debugging"""
     if model is None:
         # Use the fallback odds-based prediction
         return calculate_odds_based_prediction(game_data)
@@ -333,13 +355,43 @@ def make_prediction(model, game_data):
         # Extract features for your model
         features = extract_features_for_model(game_data)
         
-        # Create a properly ordered array of features
-        feature_names = model.steps[0][1].feature_names_in_
-        features_array = np.array([features[name] for name in feature_names]).reshape(1, -1)
+        # Uncomment for debugging
+        # debug_features(features, model)
+        
+        # Get feature names and create properly ordered array
+        try:
+            # For pipeline with named steps
+            if hasattr(model, 'steps') and len(model.steps) > 0:
+                if hasattr(model.steps[0][1], 'feature_names_in_'):
+                    feature_names = model.steps[0][1].feature_names_in_
+                else:
+                    # For calibrated classifier
+                    if hasattr(model, 'calibrated_classifiers_'):
+                        base_estimator = model.calibrated_classifiers_[0].base_estimator
+                        if hasattr(base_estimator, 'steps'):
+                            feature_names = base_estimator.steps[0][1].feature_names_in_
+                        else:
+                            # Fallback to all features
+                            feature_names = list(features.keys())
+                    else:
+                        # Fallback to all features
+                        feature_names = list(features.keys())
+            else:
+                # For simple models
+                feature_names = model.feature_names_in_ if hasattr(model, 'feature_names_in_') else list(features.keys())
+                
+            features_array = np.array([features.get(name, 0) for name in feature_names]).reshape(1, -1)
+        except Exception as e:
+            print(f"Error creating feature array: {e}")
+            # Fallback to using all features
+            features_array = np.array(list(features.values())).reshape(1, -1)
         
         # Make prediction using your trained model
         y_prob = model.predict_proba(features_array)
         home_win_prob = y_prob[0][1]  # Assuming index 1 is home win
+        
+        # Apply same clipping as in backend to ensure consistency
+        home_win_prob = min(max(home_win_prob, 0.15), 0.85)
         
         # Return prediction in required format
         return {
@@ -354,21 +406,46 @@ def make_prediction(model, game_data):
         return calculate_odds_based_prediction(game_data)
 
 def calculate_parlay_odds(probabilities):
-    """Calculate parlay odds in American format"""
-    decimal_odds = [1 / p for p in probabilities]
+    """Calculate parlay odds with better handling of edge cases"""
+    if not probabilities or len(probabilities) == 0:
+        return 0
+        
+    # Ensure probabilities are within valid range
+    valid_probs = [min(max(p, 0.01), 0.99) for p in probabilities]
+    
+    # Calculate decimal odds
+    decimal_odds = [1 / p for p in valid_probs]
     combined_decimal = np.prod(decimal_odds)
-    american_odds = (combined_decimal - 1) * 100
-    return american_odds
+    
+    # Convert to American odds
+    if combined_decimal >= 2:
+        american_odds = (combined_decimal - 1) * 100
+    else:
+        american_odds = -100 / (combined_decimal - 1)
+    
+    # Round to nearest integer
+    return round(american_odds)
 
 def format_american_odds(odds):
-    """Format American odds with + or - prefix"""
+    """Format American odds with proper handling of edge cases"""
+    # Handle non-numeric inputs
     if isinstance(odds, str):
         return odds
         
-    if odds >= 0:
-        return f"+{odds:.0f}"
+    # Handle NaN or infinity
+    if np.isnan(odds) or np.isinf(odds):
+        return "EVEN"
+        
+    # Round to integer
+    odds_int = round(odds)
+    
+    # Format with +/- prefix
+    if odds_int > 0:
+        return f"+{odds_int}"
+    elif odds_int < 0:
+        return f"{odds_int}"
     else:
-        return f"{odds:.0f}"
+        return "EVEN"
 
 def get_team_color(team_name):
     """Get team color based on team name"""

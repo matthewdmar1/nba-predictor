@@ -72,6 +72,14 @@ def generate_parlays(results_df, min_prob=0.65, max_games=3, min_games=2):
     parlays : list of dict
         List of parlay recommendations
     """
+    # Import necessary libraries
+    import numpy as np
+    
+    # Clip probabilities to avoid extreme values (use more moderate bounds)
+    results_df['home_win_probability'] = results_df['home_win_probability'].apply(
+        lambda p: min(max(p, 0.15), 0.85)
+    )
+    
     # Filter games with high confidence predictions
     high_confidence = results_df[
         ((results_df['predicted_home_win'] == True) & (results_df['home_win_probability'] >= min_prob)) | 
@@ -87,12 +95,35 @@ def generate_parlays(results_df, min_prob=0.65, max_games=3, min_games=2):
     # Sort by adjusted probability (highest confidence first)
     high_confidence = high_confidence.sort_values('adjusted_probability', ascending=False)
     
+    # If not enough high-confidence games, reduce threshold progressively
+    original_min_prob = min_prob
+    while len(high_confidence) < min_games and min_prob > 0.55:
+        # Reduce threshold by 0.05
+        min_prob -= 0.05
+        print(f"Not enough high-confidence games. Reducing threshold to {min_prob:.2f}")
+        
+        # Reapply filter with lower threshold
+        high_confidence = results_df[
+            ((results_df['predicted_home_win'] == True) & (results_df['home_win_probability'] >= min_prob)) | 
+            ((results_df['predicted_home_win'] == False) & (results_df['home_win_probability'] <= (1 - min_prob)))
+        ].copy()
+        
+        # Recalculate adjusted probability
+        high_confidence['adjusted_probability'] = high_confidence.apply(
+            lambda x: x['home_win_probability'] if x['predicted_home_win'] else (1 - x['home_win_probability']), 
+            axis=1
+        )
+        
+        # Sort by adjusted probability
+        high_confidence = high_confidence.sort_values('adjusted_probability', ascending=False)
+    
     # Check if we have enough high-confidence games
     if len(high_confidence) < min_games:
-        print(f"Not enough high-confidence games found. Only {len(high_confidence)} games meet the minimum probability threshold of {min_prob}.")
+        print(f"Warning: Only {len(high_confidence)} games meet the confidence threshold. Need at least {min_games} games.")
+        # Return an empty list if threshold cant be met, to avoid None errors
         return []
     
-    # Generate parlays (for this simplified version, we'll create one optimal parlay)
+    # Generate parlays
     parlays = []
     
     # Strategy 1: Highest combined probability parlay
@@ -124,7 +155,7 @@ def generate_parlays(results_df, min_prob=0.65, max_games=3, min_games=2):
         
         parlays.append(alt_parlay)
     
-    print(f"Generated {len(parlays)} parlay recommendations.")
+    print(f"Generated {len(parlays)} parlay recommendations with min confidence {min_prob:.2f}.")
     return parlays
 
 def simulate_roi(parlays, results_df, iterations=1000, stake=100):
@@ -149,12 +180,38 @@ def simulate_roi(parlays, results_df, iterations=1000, stake=100):
     """
     print(f"Simulating ROI over {iterations} iterations with ${stake} stake per parlay...")
     
+    # Handle empty parlays
+    if not parlays:
+        print("No parlays to simulate ROI.")
+        return {
+            'roi_df': pd.DataFrame(),
+            'total_investment': 0,
+            'total_profit': 0,
+            'total_roi': 0
+        }
+    
     # Function to calculate parlay odds (American format)
+    # Edit the calculate_parlay_odds function inside simulate_roi
     def calculate_parlay_odds(probabilities):
-        decimal_odds = [1 / p for p in probabilities]
+        """Calculate parlay odds with better handling of edge cases"""
+        if not probabilities or len(probabilities) == 0:
+            return 0
+            
+        # Ensure probabilities are within valid range
+        valid_probs = [min(max(p, 0.01), 0.99) for p in probabilities]
+        
+        # Calculate decimal odds
+        decimal_odds = [1 / p for p in valid_probs]
         combined_decimal = np.prod(decimal_odds)
-        american_odds = (combined_decimal - 1) * 100
-        return american_odds
+        
+        # Convert to American odds
+        if combined_decimal >= 2:
+            american_odds = (combined_decimal - 1) * 100
+        else:
+            american_odds = -100 / (combined_decimal - 1)
+        
+        # Round to nearest integer
+        return round(american_odds)
     
     # Simulate ROI for each parlay
     roi_data = []

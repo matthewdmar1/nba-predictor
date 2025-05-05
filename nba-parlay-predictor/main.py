@@ -92,12 +92,40 @@ def main():
     
     # 4. Split data
     print("Splitting data into training and testing sets...")
-    X = feature_df.drop(['HOME_WIN', 'GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 'HOME_PTS', 'AWAY_PTS'], axis=1)
-    y = feature_df['HOME_WIN']
+    # Explicitly exclude leaking columns and non-feature columns
+    leakage_columns = ['HOME_PTS_x', 'HOME_PTS_y', 'HOME_PLUS_MINUS', 'AWAY_PLUS_MINUS', 
+                  'HOME_WIN_x', 'HOME_WIN_y', 'PTS_DIFF', 'HOME_PTS']
+    non_feature_columns = ['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 'AWAY_PTS', 'HOME_WIN']
+
+    safe_feature_columns = [col for col in feature_df.columns 
+                        if col not in leakage_columns 
+                        and col not in non_feature_columns]
+
+    print(f"Using {len(safe_feature_columns)} safe features after removing leaking columns:")
+    for col in safe_feature_columns:
+        print(f"  - {col}")
+
+    X = feature_df[safe_feature_columns]
+    y = feature_df['HOME_WIN']  # Use HOME_WIN as target
+
+    # Keep the original train/test split logic, but with the new X and y
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=config.TEST_SIZE, random_state=config.RANDOM_STATE
     )
+
+    # Store game info for reference
+    teams_info = feature_df[['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 'HOME_PTS_x', 'AWAY_PTS', 'HOME_WIN']]
+    teams_info_test = teams_info.iloc[X_test.index]
     
+    # Check for potential data leakage
+    print("Checking for potential data leakage...")
+    potential_leakage_columns = [col for col in X.columns if 'WIN' in col or 'PLUS_MINUS' in col or 'PTS' in col]
+    if potential_leakage_columns:
+        print("WARNING: Potential data leakage detected in these columns:")
+        for col in potential_leakage_columns:
+            print(f"  - {col}")
+        print("Consider removing them from your features to get a more realistic model.")
+
     # Store game info for reference
     teams_info = feature_df[['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 'HOME_PTS', 'AWAY_PTS', 'HOME_WIN']]
     teams_info_test = teams_info.iloc[X_test.index]
@@ -109,7 +137,9 @@ def main():
     # Save model
     from joblib import dump
     dump(model, f"{config.MODELS_DIR}/model.pkl")
-    
+    dump(model, f"{config.MODELS_DIR_ALT}/model.pkl")  # Save to second location
+    print(f"Model saved to {config.MODELS_DIR}/model.pkl and {config.MODELS_DIR_ALT}/model.pkl")
+
     # 6. Evaluate model
     print("Evaluating model performance...")
     results_df = evaluate_model(model, X_test, y_test, teams_info_test)
@@ -124,19 +154,26 @@ def main():
     
     # 8. Display results
     print("\n----- PARLAY RECOMMENDATIONS -----")
-    for i, parlay in enumerate(parlays):
-        print(f"\nParlay #{i+1}:")
-        print(f"Combined probability: {parlay['combined_probability']:.4f}")
-        print(f"Number of games: {parlay['parlay_size']}")
-        print("\nGames in parlay:")
-        for game in parlay['games']:
-            prediction = "HOME WIN" if game['predicted_home_win'] else "AWAY WIN"
-            print(f"  {game['HOME_TEAM']} vs {game['AWAY_TEAM']} - " 
-                  f"Prediction: {prediction} (Confidence: {game['home_win_probability']:.4f})")
-    
+    if not parlays:
+        print("No parlays could be generated that meet the confidence threshold.")
+        print("Try lowering the MIN_CONFIDENCE parameter in config.py")
+    else:
+        for i, parlay in enumerate(parlays):
+            print(f"\nParlay #{i+1}:")
+            print(f"Combined probability: {parlay['combined_probability']:.4f}")
+            print(f"Number of games: {parlay['parlay_size']}")
+            print("\nGames in parlay:")
+            for game in parlay['games']:
+                prediction = "HOME WIN" if game['predicted_home_win'] else "AWAY WIN"
+                print(f"  {game['HOME_TEAM']} vs {game['AWAY_TEAM']} - " 
+                    f"Prediction: {prediction} (Confidence: {game['home_win_probability']:.4f})")
+   
     # 9. Simulate ROI
     print("\n----- ROI SIMULATION -----")
-    roi_results = simulate_roi(parlays, results_df)
+    if not parlays:
+        print("No parlays to simulate ROI.")
+    else:
+        roi_results = simulate_roi(parlays, results_df)
     
     # 10. Create visualizations
     print("\nGenerating visualizations...")

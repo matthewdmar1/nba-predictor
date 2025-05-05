@@ -6,6 +6,7 @@ Configuration for NBA Parlay Prediction project
 DATA_RAW_DIR = 'data/raw'
 DATA_PROCESSED_DIR = 'data/processed'
 MODELS_DIR = 'results/models'
+MODELS_DIR_ALT = '../frontend'
 FIGURES_DIR = 'results/figures'
 
 # Data parameters
