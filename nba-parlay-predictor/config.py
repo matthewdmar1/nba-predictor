@@ -19,3 +19,8 @@ CV_FOLDS = 5            # Cross-validation folds
 # Parlay parameters
 MIN_CONFIDENCE = 0.65   # Minimum confidence for parlay selection
 MAX_PARLAY_SIZE = 3     # Maximum number of games in a parlay
+
+# Evaluation parameters
+ENABLE_TEMPORAL_VALIDATION = True  # Enable/disable temporal validation
+EVALUATION_DIR = 'results/evaluation'  # Directory for evaluation results
+TRACK_PARLAYS = True  # Enable/disable parlay tracking

@@ -16,6 +16,8 @@ from src.features.build_features import engineer_features
 from src.models.train_model import train_model
 from src.models.evaluate import evaluate_model, generate_parlays, simulate_roi
 from src.visualization.visualize import plot_feature_importance, plot_roi
+from src.evaluation.parlay_tracker import ParlayTracker
+from src.evaluation.backtesting import BacktestEngine
 
 def main():
     """
@@ -143,5 +145,70 @@ def main():
     
     print("\nNBA Parlay Prediction System complete!")
 
+def evaluate_parlay_strategy(parlays, results_df, model):
+    """
+    Evaluate parlay prediction strategy and track results
+    """
+    print("\n----- PARLAY STRATEGY EVALUATION -----")
+    
+    # Initialize tracker
+    tracker = ParlayTracker()
+    
+    # Record predictions
+    for i, parlay in enumerate(parlays):
+        prediction_id = tracker.record_prediction(
+            parlay['games'],
+            parlay['combined_probability'],
+            model_version=f"v{config.NBA_SEASON.replace('-', '_')}",
+            confidence=parlay['combined_probability']
+        )
+        
+        print(f"Recorded prediction #{prediction_id}")
+    
+    # Get recent performance
+    performance = tracker.get_recent_performance(n_days=30)
+    
+    print("\nRecent parlay performance (last 30 days):")
+    if performance['sample_size'] > 0:
+        print(f"  Accuracy: {performance['accuracy']:.2%}")
+        print(f"  Average Confidence: {performance['average_confidence']:.2%}")
+        print(f"  Calibration Error: {performance['calibration_error']:.2%}")
+        print(f"  Total Profit: ${performance['profit']:.2f}")
+        print(f"  ROI: {performance['roi']:.2f}%")
+        print(f"  Sample Size: {performance['sample_size']} parlays")
+    else:
+        print("  No recent parlays recorded")
+    
+    # Run a quick backtest if we have enough data
+    if 'GAME_DATE' in results_df.columns:
+        print("\nRunning quick backtest on test data...")
+        
+        # Get feature columns
+        non_feature_cols = ['GAME_DATE', 'HOME_TEAM', 'AWAY_TEAM', 
+                          'HOME_PTS', 'AWAY_PTS', 'HOME_WIN', 
+                          'predicted_home_win', 'home_win_probability', 'correct_prediction']
+        feature_cols = [col for col in results_df.columns if col not in non_feature_cols]
+        
+        if len(feature_cols) > 0:
+            backtest_engine = BacktestEngine(
+                results_df,
+                target_column='HOME_WIN',
+                feature_columns=feature_cols,
+                date_column='GAME_DATE',
+                min_confidence=config.MIN_CONFIDENCE,
+                max_games=config.MAX_PARLAY_SIZE
+            )
+            
+            backtest_results = backtest_engine.run_backtest()
+            
+            if backtest_results['total_bets'] > 0:
+                print(f"  Win Rate: {backtest_results['win_rate']:.2%}")
+                print(f"  Total Profit: ${backtest_results['total_profit']:.2f}")
+                print(f"  ROI: {backtest_results['total_roi']:.2f}%")
+                print(f"  Total Bets: {backtest_results['total_bets']}")
+            else:
+                print("  Not enough data for backtest")
+    
+    return performance
 if __name__ == "__main__":
     main()
