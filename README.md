@@ -2,8 +2,6 @@
 
 A machine learning system for predicting NBA game outcomes and generating optimal betting parlays.
 
-![NBA Parlay Predictor](https://raw.githubusercontent.com/username/nba-parlay-predictor/main/results/figures/roi_simulation.png)
-
 ## Overview
 
 This project uses historical NBA game data and betting odds to train a machine learning model that predicts the outcomes of NBA games. The model is used to identify high-confidence predictions and generate parlay betting recommendations designed to maximize ROI.
