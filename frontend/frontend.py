@@ -102,8 +102,8 @@ def load_model():
     possible_paths = [
         "model.pkl",  # In the same directory
         "../model.pkl",  # One directory up
-        "../nba-parlay-predictor/results/models/model.pkl",  # Relative to the frontend directory
-        "../../nba-parlay-predictor/results/models/model.pkl",  # If frontend is in a subdirectory
+        "../../nba-parlay-predictor/results/models/model.pkl",  # Correct relative path from frontend to model
+        "../results/models/model.pkl",  # Alternative if directory structure is different
     ]
     
     # Try each path until we find the model
@@ -112,12 +112,17 @@ def load_model():
             import joblib
             import os
             
+            # Convert backslashes to forward slashes for cross-platform compatibility
+            path = path.replace('\\', '/')
+            
             # Check if the file exists before trying to load it
             if os.path.exists(path):
                 model = joblib.load(path)
                 st.success(f"Successfully loaded NBA prediction model from {path}")
                 return model
         except Exception as e:
+            # Print the error for debugging
+            print(f"Error loading model from {path}: {e}")
             # Just continue to the next path
             pass
     
@@ -206,112 +211,114 @@ def default_features():
 
 def extract_features_for_model(game_data):
     """
-    Extract features in the format expected by your trained model
-    
-    This function needs to be customized based on how your model was trained
-    and what features it expects
+    Extract features in the exact format expected by your trained model
     """
-    # Create a features array or dictionary that matches your model's expected input
     try:
-        # Parse spread value
+        # Initialize all 42 required features with default values
+        features = {
+            'GAME_ID_x': 0,
+            'HOME_PTS_x': 0,
+            'HOME_FG_PCT': 0.45,
+            'AWAY_FG_PCT': 0.45,
+            'HOME_FT_PCT': 0.75,
+            'AWAY_FT_PCT': 0.75,
+            'HOME_REB': 40,
+            'AWAY_REB': 40,
+            'HOME_AST': 25,
+            'AWAY_AST': 25,
+            'HOME_STL': 7,
+            'AWAY_STL': 7,
+            'HOME_BLK': 5,
+            'AWAY_BLK': 5,
+            'HOME_TOV': 14,
+            'AWAY_TOV': 14,
+            'HOME_PLUS_MINUS': 0,
+            'AWAY_PLUS_MINUS': 0,
+            'HOME_WIN_x': 0,
+            'GAME_ID_y': 0,
+            'HOME_PTS_y': 0,
+            'HOME_NET_RATING': 0,
+            'AWAY_NET_RATING': 0,
+            'RATING_DIFF': 0,
+            'HOME_ODDS': -110,
+            'AWAY_ODDS': -110,
+            'SPREAD': 0,
+            'HOME_WIN_y': 0,
+            'PTS_DIFF': 0,
+            'FG_PCT_DIFF': 0,
+            'FT_PCT_DIFF': 0,
+            'REB_DIFF': 0,
+            'AST_DIFF': 0,
+            'STL_DIFF': 0,
+            'BLK_DIFF': 0,
+            'TOV_DIFF': 0,
+            'HOME_OFF_EFF': 1.0,
+            'AWAY_OFF_EFF': 1.0,
+            'OFF_EFF_DIFF': 0,
+            'HOME_IMPLIED_PROB': 0.5,
+            'AWAY_IMPLIED_PROB': 0.5,
+            'OVERROUND': 1.0
+        }
+        
+        # Now update values from game_data where available
+        
+        # Parse moneyline for HOME_ODDS and AWAY_ODDS
+        try:
+            home_ml_str = game_data.get('home_moneyline', '-110')
+            away_ml_str = game_data.get('away_moneyline', '-110')
+            features['HOME_ODDS'] = float(str(home_ml_str).replace('+', ''))
+            features['AWAY_ODDS'] = float(str(away_ml_str).replace('+', ''))
+        except:
+            pass  # Keep default values if parsing fails
+        
+        # Parse spread for SPREAD
         try:
             home_spread_str = game_data.get('home_spread', '0')
-            home_spread = float(home_spread_str.split()[0] if ' ' in str(home_spread_str) else home_spread_str)
+            features['SPREAD'] = float(home_spread_str.split()[0] if ' ' in str(home_spread_str) else home_spread_str)
         except:
-            home_spread = 0.0
+            pass  # Keep default value
         
-        # Parse moneyline
+        # Calculate implied probabilities from odds
         try:
-            home_ml_str = game_data.get('home_moneyline', '-110') 
-            away_ml_str = game_data.get('away_moneyline', '-110')
-            home_ml = float(str(home_ml_str).replace('+', ''))
-            away_ml = float(str(away_ml_str).replace('+', ''))
+            home_ml = features['HOME_ODDS']
+            away_ml = features['AWAY_ODDS']
+            
+            # Convert moneyline to probability
+            if home_ml > 0:
+                features['HOME_IMPLIED_PROB'] = 100 / (home_ml + 100)
+            else:
+                features['HOME_IMPLIED_PROB'] = abs(home_ml) / (abs(home_ml) + 100)
+                
+            if away_ml > 0:
+                features['AWAY_IMPLIED_PROB'] = 100 / (away_ml + 100)
+            else:
+                features['AWAY_IMPLIED_PROB'] = abs(away_ml) / (abs(away_ml) + 100)
+                
+            features['OVERROUND'] = features['HOME_IMPLIED_PROB'] + features['AWAY_IMPLIED_PROB']
         except:
-            home_ml = -110
-            away_ml = -110
-        
-        # Convert moneyline to implied probability
-        if home_ml > 0:
-            home_implied_prob = 100 / (home_ml + 100)
-        else:
-            home_implied_prob = abs(home_ml) / (abs(home_ml) + 100)
-            
-        if away_ml > 0:
-            away_implied_prob = 100 / (away_ml + 100)
-        else:
-            away_implied_prob = abs(away_ml) / (abs(away_ml) + 100)
-            
-        overround = home_implied_prob + away_implied_prob
-        
-        # Set default team stats (since we can't get real stats from the odds)
-        home_fg_pct = 0.45
-        away_fg_pct = 0.45
-        home_ft_pct = 0.75
-        away_ft_pct = 0.75
-        home_reb = 44
-        away_reb = 42
-        home_ast = 24
-        away_ast = 22
-        home_stl = 7
-        away_stl = 7
-        home_blk = 5
-        away_blk = 4
-        home_tov = 14
-        away_tov = 14
+            pass  # Keep default values
         
         # Calculate stat differences
-        fg_pct_diff = home_fg_pct - away_fg_pct
-        ft_pct_diff = home_ft_pct - away_ft_pct
-        reb_diff = home_reb - away_reb
-        ast_diff = home_ast - away_ast
-        stl_diff = home_stl - away_stl
-        blk_diff = home_blk - away_blk
-        tov_diff = home_tov - away_tov
+        features['FG_PCT_DIFF'] = features['HOME_FG_PCT'] - features['AWAY_FG_PCT']
+        features['FT_PCT_DIFF'] = features['HOME_FT_PCT'] - features['AWAY_FT_PCT']
+        features['REB_DIFF'] = features['HOME_REB'] - features['AWAY_REB']
+        features['AST_DIFF'] = features['HOME_AST'] - features['AWAY_AST']
+        features['STL_DIFF'] = features['HOME_STL'] - features['AWAY_STL']
+        features['BLK_DIFF'] = features['HOME_BLK'] - features['AWAY_BLK']
+        features['TOV_DIFF'] = features['HOME_TOV'] - features['AWAY_TOV']
+        features['OFF_EFF_DIFF'] = features['HOME_OFF_EFF'] - features['AWAY_OFF_EFF']
         
-        # Calculate offensive efficiency
-        home_off_eff = 1.0
-        away_off_eff = 1.0
-        off_eff_diff = home_off_eff - away_off_eff
-        
-        # Create features dictionary (adjust based on your model's expected features)
-        features = {
-            'SPREAD': home_spread,
-            'HOME_ODDS': home_ml,
-            'AWAY_ODDS': away_ml,
-            'HOME_IMPLIED_PROB': home_implied_prob,
-            'AWAY_IMPLIED_PROB': away_implied_prob,
-            'OVERROUND': overround,
-            'HOME_FG_PCT': home_fg_pct,
-            'AWAY_FG_PCT': away_fg_pct,
-            'HOME_FT_PCT': home_ft_pct,
-            'AWAY_FT_PCT': away_ft_pct,
-            'HOME_REB': home_reb,
-            'AWAY_REB': away_reb,
-            'HOME_AST': home_ast,
-            'AWAY_AST': away_ast,
-            'HOME_STL': home_stl,
-            'AWAY_STL': away_stl,
-            'HOME_BLK': home_blk,
-            'AWAY_BLK': away_blk,
-            'HOME_TOV': home_tov,
-            'AWAY_TOV': away_tov,
-            'FG_PCT_DIFF': fg_pct_diff,
-            'FT_PCT_DIFF': ft_pct_diff,
-            'REB_DIFF': reb_diff,
-            'AST_DIFF': ast_diff,
-            'STL_DIFF': stl_diff,
-            'BLK_DIFF': blk_diff,
-            'TOV_DIFF': tov_diff,
-            'HOME_OFF_EFF': home_off_eff,
-            'AWAY_OFF_EFF': away_off_eff,
-            'OFF_EFF_DIFF': off_eff_diff
-        }
+        # For the NET_RATING and RATING_DIFF, we don't have real data from scraping
+        # so we'll use the spread as a proxy
+        features['RATING_DIFF'] = -features['SPREAD']  # Negative spread means home team is favored
+        features['HOME_NET_RATING'] = features['RATING_DIFF'] / 2
+        features['AWAY_NET_RATING'] = -features['RATING_DIFF'] / 2
         
         return features
         
     except Exception as e:
         print(f"Error extracting features: {e}")
-        # Return default features
+        # If anything fails, return the default features
         return default_features()
 
 def make_prediction(model, game_data):
@@ -326,29 +333,13 @@ def make_prediction(model, game_data):
         # Extract features for your model
         features = extract_features_for_model(game_data)
         
-        # Convert features to the format expected by your model
-        if hasattr(model, 'feature_names_in_'):
-            # For sklearn models that expect specific features in order
-            feature_names = model.feature_names_in_
-            features_list = [features[feature] for feature in feature_names]
-            features_array = np.array(features_list).reshape(1, -1)
-        elif hasattr(model, 'steps') and hasattr(model.steps[0][1], 'feature_names_in_'):
-            # For pipeline models
-            feature_names = model.steps[0][1].feature_names_in_
-            features_list = [features[feature] for feature in feature_names]
-            features_array = np.array(features_list).reshape(1, -1)
-        else:
-            # If model doesn't specify features, use all
-            features_array = np.array(list(features.values())).reshape(1, -1)
+        # Create a properly ordered array of features
+        feature_names = model.steps[0][1].feature_names_in_
+        features_array = np.array([features[name] for name in feature_names]).reshape(1, -1)
         
         # Make prediction using your trained model
-        if hasattr(model, 'predict_proba'):
-            proba = model.predict_proba(features_array)
-            home_win_prob = proba[0][1]  # Assuming index 1 is home win
-        else:
-            # If the model doesn't have predict_proba, use predict and estimate prob
-            pred = model.predict(features_array)[0]
-            home_win_prob = float(pred)  # Assuming binary prediction 0/1
+        y_prob = model.predict_proba(features_array)
+        home_win_prob = y_prob[0][1]  # Assuming index 1 is home win
         
         # Return prediction in required format
         return {
